@@ -221,8 +221,7 @@ contract OnlyFlans
     uint256 private constant holdersShareFee = 5;
     
     uint256 private constant pointMultiplier = 10 ** 18;
-    uint256 private totalDividendPoints;
-    uint256 private unclaimedDividends;
+    uint256 private totalHolderShareFees;
     
     uint256 private constant maxAllowedTokenPerAddress = 10000000000 * (10 ** uint256(Decimals));
     
@@ -251,9 +250,9 @@ contract OnlyFlans
         return TokenMaxSupply;
     }
     
-    function CheckAddressBalance(address addressToCheck) public view returns (uint256)
+    function CheckAddressBalance(address addressToCheck) public returns (uint256)
     {
-        return balances[addressToCheck];
+        return GetAddressBalanceWithReflection(addressToCheck);
     }
     
     function CheckAllowance(address from, address to) public view returns (uint256)
@@ -302,7 +301,7 @@ contract OnlyFlans
         uint256 holdersFee = amount.mul(holdersShareFee).div(100);
         uint256 liqFee = amount.mul(liquidityFee).div(100);
         
-        Reflect(holdersFee);
+        totalHolderShareFees = totalHolderShareFees.add(amount);
         
         amount -= holdersFee + liqFee;
                 
@@ -325,7 +324,7 @@ contract OnlyFlans
         uint256 holdersFee = amount.mul(holdersShareFee).div(100);
         uint256 liqFee = amount.mul(liquidityFee).div(100);
         
-        Reflect(holdersFee);
+        totalHolderShareFees = totalHolderShareFees.add(amount);
         
         amount -= holdersFee + liqFee;
         
@@ -380,26 +379,20 @@ contract OnlyFlans
     
     function GetAddressDividends(address addressToCheck) private view returns(uint256) 
     {
-        uint256 newDividendPoints = totalDividendPoints - addressLastDividends[addressToCheck];
+        uint256 newDividendPoints = totalHolderShareFees - addressLastDividends[addressToCheck];
         return (balances[addressToCheck].mul(newDividendPoints)).div(pointMultiplier);
     }
 
-    modifier UpdateAddress(address addressToUpdate) 
+    function GetAddressBalanceWithReflection(address addressToUpdate) private returns (uint256)
     {
         uint256 owing = GetAddressDividends(addressToUpdate);
+        
         if(owing > 0) 
         {
-            unclaimedDividends = unclaimedDividends.sub(owing);
             balances[addressToUpdate] = balances[addressToUpdate].add(owing);
-            addressLastDividends[addressToUpdate] = totalDividendPoints;
+            addressLastDividends[addressToUpdate] = totalHolderShareFees;
         }
-        _;
-    }
-    
-    function Reflect(uint256 amount) private
-    {
-        totalDividendPoints = totalDividendPoints.add(amount.mul(pointMultiplier).div(TokenMaxSupply));
-        TokenMaxSupply = TokenMaxSupply.add(amount);
-        unclaimedDividends = unclaimedDividends.add(amount);
+        
+        return balances[addressToUpdate];
     }
 }
