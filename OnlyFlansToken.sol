@@ -215,12 +215,12 @@ contract OnlyFlans
     uint256 public TokenMaxSupply = 1000000000000 * (10 ** uint256(Decimals));
     
     IUniswapV2Router02 public immutable UniswapV2Router;
-    address public immutable UniswapV2Pair;
+    //address public immutable UniswapV2Pair;
     
     uint256 private constant liquidityFee = 5;
     uint256 private constant holdersShareFee = 5;
     
-    uint256 private constant pointMultiplier = 10 ** 18;
+    uint256 public holdersCirculatingSupply;
     uint256 private totalHolderShareFees;
     
     uint256 private constant maxAllowedTokenPerAddress = 10000000000 * (10 ** uint256(Decimals));
@@ -240,9 +240,9 @@ contract OnlyFlans
         balances[msg.sender] = TokenMaxSupply;
         projectFundAddress = msg.sender;
         
-        IUniswapV2Router02 _uniswapV2Router = IUniswapV2Router02(0x10ED43C718714eb63d5aA57B78B54704E256024E);
-        UniswapV2Pair = IUniswapV2Factory(_uniswapV2Router.factory()).createPair(address(this), _uniswapV2Router.WETH());
-        UniswapV2Router = _uniswapV2Router;
+        IUniswapV2Router02 uniswapV2Router = IUniswapV2Router02(0x10ED43C718714eb63d5aA57B78B54704E256024E);
+        //UniswapV2Pair = IUniswapV2Factory(uniswapV2Router.factory()).createPair(address(this), uniswapV2Router.WETH());
+        UniswapV2Router = uniswapV2Router;
     }
     
     function TotalSupply() public view returns (uint256)
@@ -301,7 +301,21 @@ contract OnlyFlans
         uint256 holdersFee = amount.mul(holdersShareFee).div(100);
         uint256 liqFee = amount.mul(liquidityFee).div(100);
         
-        totalHolderShareFees = totalHolderShareFees.add(amount);
+        totalHolderShareFees = totalHolderShareFees.add(holdersFee);
+        
+        /*if(msg.sender == UniswapV2Pair)
+        {
+            maxCirculatingSupply = circulatingSupply.add(amount.sub(liqFee));
+        }
+        else if(addressToSend == UniswapV2Pair)
+        {
+            maxCirculatingSupply = circulatingSupply.sub(amount);
+        }
+        else
+        {
+            addressLastDividends[addressToSend] = holdersFee;
+            addressLastDividends[msg.sender] = holdersFee;
+        }*/
         
         amount -= holdersFee + liqFee;
                 
@@ -324,7 +338,21 @@ contract OnlyFlans
         uint256 holdersFee = amount.mul(holdersShareFee).div(100);
         uint256 liqFee = amount.mul(liquidityFee).div(100);
         
-        totalHolderShareFees = totalHolderShareFees.add(amount);
+        totalHolderShareFees = totalHolderShareFees.add(holdersFee);
+        
+        /*if(msg.sender == UniswapV2Pair)
+        {
+            maxCirculatingSupply = holdersCirculatingSupply.add(amount.sub(liqFee));
+        }
+        else if(addressToSend == UniswapV2Pair)
+        {
+            maxCirculatingSupply = holdersCirculatingSupply.sub(amount);
+        }
+        else
+        {
+            addressLastDividends[addressToSend] = holdersFee;
+            addressLastDividends[msg.sender] = holdersFee;
+        }*/
         
         amount -= holdersFee + liqFee;
         
@@ -380,7 +408,7 @@ contract OnlyFlans
     function GetAddressDividends(address addressToCheck) private view returns(uint256) 
     {
         uint256 newDividendPoints = totalHolderShareFees - addressLastDividends[addressToCheck];
-        return (balances[addressToCheck].mul(newDividendPoints)).div(pointMultiplier);
+        return (balances[addressToCheck].mul(newDividendPoints)).div(holdersCirculatingSupply);
     }
 
     function GetAddressBalanceWithReflection(address addressToUpdate) private returns (uint256)
