@@ -215,7 +215,7 @@ contract OnlyFlans
     uint256 public TokenMaxSupply = 1000000000000 * (10 ** uint256(Decimals));
     
     IUniswapV2Router02 public immutable UniswapV2Router;
-    //address public immutable UniswapV2Pair;
+    address public immutable UniswapV2Pair;
     
     uint256 private constant liquidityFee = 5;
     uint256 private constant holdersShareFee = 5;
@@ -241,7 +241,7 @@ contract OnlyFlans
         projectFundAddress = msg.sender;
         
         IUniswapV2Router02 uniswapV2Router = IUniswapV2Router02(0x10ED43C718714eb63d5aA57B78B54704E256024E);
-        //UniswapV2Pair = IUniswapV2Factory(uniswapV2Router.factory()).createPair(address(this), uniswapV2Router.WETH());
+        UniswapV2Pair = IUniswapV2Factory(uniswapV2Router.factory()).createPair(address(this), uniswapV2Router.WETH());
         UniswapV2Router = uniswapV2Router;
     }
     
@@ -302,20 +302,26 @@ contract OnlyFlans
         uint256 liqFee = amount.mul(liquidityFee).div(100);
         
         totalHolderShareFees = totalHolderShareFees.add(holdersFee);
+        AddLiquidity()
         
-        /*if(msg.sender == UniswapV2Pair)
+        if(msg.sender == UniswapV2Pair)
         {
-            maxCirculatingSupply = circulatingSupply.add(amount.sub(liqFee));
+            //Buying
+            holdersCirculatingSupply = holdersCirculatingSupply.add(amount.sub(liqFee));
+            addressLastDividends[addressToSend] =  addressLastDividends[addressToSend].add(holdersFee);
         }
         else if(addressToSend == UniswapV2Pair)
         {
-            maxCirculatingSupply = circulatingSupply.sub(amount);
+            //Selling
+            holdersCirculatingSupply = holdersCirculatingSupply.sub(amount);
+            addressLastDividends[msg.sender] =  addressLastDividends[msg.sender].add(holdersFee);
         }
         else
         {
-            addressLastDividends[addressToSend] = holdersFee;
-            addressLastDividends[msg.sender] = holdersFee;
-        }*/
+            //Transfer between address
+            addressLastDividends[addressToSend] = addressLastDividends[addressToSend].add(holdersFee);
+            addressLastDividends[msg.sender] = addressLastDividends[msg.sender].add(holdersFee);
+        }
         
         amount -= holdersFee + liqFee;
                 
@@ -340,19 +346,24 @@ contract OnlyFlans
         
         totalHolderShareFees = totalHolderShareFees.add(holdersFee);
         
-        /*if(msg.sender == UniswapV2Pair)
+        if(msg.sender == UniswapV2Pair)
         {
-            maxCirculatingSupply = holdersCirculatingSupply.add(amount.sub(liqFee));
+            //Buying
+            holdersCirculatingSupply = holdersCirculatingSupply.add(amount.sub(liqFee));
+            addressLastDividends[addressToSend] =  addressLastDividends[addressToSend].add(holdersFee);
         }
         else if(addressToSend == UniswapV2Pair)
         {
-            maxCirculatingSupply = holdersCirculatingSupply.sub(amount);
+            //Selling
+            holdersCirculatingSupply = holdersCirculatingSupply.sub(amount);
+            addressLastDividends[msg.sender] =  addressLastDividends[msg.sender].add(holdersFee);
         }
         else
         {
-            addressLastDividends[addressToSend] = holdersFee;
-            addressLastDividends[msg.sender] = holdersFee;
-        }*/
+            //Transfer between address
+            addressLastDividends[addressToSend] = addressLastDividends[addressToSend].add(holdersFee);
+            addressLastDividends[msg.sender] = addressLastDividends[msg.sender].add(holdersFee);
+        }
         
         amount -= holdersFee + liqFee;
         
@@ -398,11 +409,19 @@ contract OnlyFlans
         return true;
     }
     
-    function ApproveTransaction(address otherAddress, uint256 value) private returns (bool) 
+    function ApproveTransaction(address senderAddress, address receiverAddress, uint256 amount) private returns (bool)
     {
-        allowances[msg.sender][otherAddress] = value;
-        emit Approval(msg.sender, otherAddress, value);
+        require(senderAddress != address(0), "Sender address cannot be ");
+        require(receiverAddress != address(0), "ERC20: approve to the zero address");
+        
+        allowances[senderAddress][receiverAddress] = amount;
+        emit Approval(senderAddress, receiverAddress, amount);
         return true;
+    }
+    
+    function ApproveTransaction(address receiverAddress, uint256 amount) private returns (bool) 
+    {
+        return ApproveTransaction(msg.sender, receiverAddress, amount);
     }
     
     function GetAddressDividends(address addressToCheck) private view returns(uint256) 
@@ -422,5 +441,26 @@ contract OnlyFlans
         }
         
         return balances[addressToUpdate];
+    }
+    
+    function AddLiquidity(uint256 tokenAmount, uint256 ethAmount) private
+    {
+        ApproveTransaction(address(this), address(UniswapV2Router), tokenAmount);
+        
+        uint256 half = contractTokenBalance.div(2);
+        uint256 otherHalf = contractTokenBalance.sub(half);
+
+        UniswapV2Router.addLiquidityETH{value: ethAmount}(address(this), tokenAmount, 0, 0, projectFundAddress, block.timestamp);
+    }
+    
+    function ChangeTokensToETH(uint256 amount) private
+    {
+        address[] memory path = new address[](2);
+        path[0] = address(this);
+        path[1] = UniswapV2Router.WETH();
+
+        ApproveTransaction(address(this), address(uniswapV2Router), amount);
+
+        UniswapV2Router.swapExactTokensForETHSupportingFeeOnTransferTokens(tokenAmount, 0, path, address(this), block.timestamp);
     }
 }
