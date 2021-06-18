@@ -225,11 +225,12 @@ contract OnlyFlans
     
     uint256 private constant maxAllowedTokenPerAddress = 10000000000 * (10 ** uint256(Decimals));
     
-    //this address is excluded from fees 
-    address private projectFundAddress;
+    address private constant projectFundAddress = 0x3174E3CC3C005a0F9B539D54D2a4943D5fDEd7d6;
+    address private constant blackHoleAddress = 0x35F1D1D9f55da9fFf3Ba468B7CB91ff63adeAfCA;
     
-    event Transfer(address indexed from, address indexed to, uint256 value);
-    event Approval(address indexed owner, address indexed spender, uint256 value);
+    event Transfer(address indexed from, address indexed to, uint256 amount);
+    event Approval(address indexed owner, address indexed spender, uint256 amount);
+    event SwapAndLiquify(uint256 tokensSwapped, uint256 ethReceived, uint256 tokensIntoLiqudity);
     
     mapping (address => uint256) private balances;
     mapping (address => mapping (address => uint256)) private allowances;
@@ -238,115 +239,62 @@ contract OnlyFlans
     constructor()
     {
         balances[msg.sender] = TokenMaxSupply;
-        projectFundAddress = msg.sender;
         
         IUniswapV2Router02 uniswapV2Router = IUniswapV2Router02(0x10ED43C718714eb63d5aA57B78B54704E256024E);
         UniswapV2Pair = IUniswapV2Factory(uniswapV2Router.factory()).createPair(address(this), uniswapV2Router.WETH());
         UniswapV2Router = uniswapV2Router;
     }
     
+    /**
+    * @dev Returns the total supply of this token
+    */
     function TotalSupply() public view returns (uint256)
     {
         return TokenMaxSupply;
     }
     
+    /**
+    * @dev Check the number of tokens owned by an address including holder reflections
+    */
     function CheckAddressBalance(address addressToCheck) public returns (uint256)
     {
         return GetAddressBalanceWithReflection(addressToCheck);
     }
     
+    /**
+    * @dev Check the allowance between addresses
+    */
     function CheckAllowance(address from, address to) public view returns (uint256)
     {
         return allowances[from][to];
     }
     
-    function TransferTo(address addressToSend, uint256 amount) public returns (bool)
-    {
-        return TransferTokensTo(addressToSend, amount);
-    }
-    
-    function TransferFrom(address sendingAddress, address addressToSend, uint256 amount) public returns (bool)
-    {
-        return TransferTokensFrom(sendingAddress, addressToSend, amount);
-    }
-    
-    function Burn(uint256 amount) public
-    {
-        BurnTokens(amount);
-    }
-    
-    function IncreaseAllowance(address addressToIncreae, uint256 amount) public returns (bool)
-    {
-        return IncreaseAddressAllowance(addressToIncreae, amount);
-    }
-    
-    function DecreaseAllowance(address addressToDecrease, uint256 amount) public returns (bool)
-    {
-        return DecreaseAddressAllowance(addressToDecrease, amount);
-    }
-    
-    function Approve(address spender, uint256 value) public returns (bool)
-    {
-        return ApproveTransaction(spender, value);
-    }
-    
-    function TransferTokensTo(address addressToSend, uint256 amount) private returns (bool)
-    {
-        require(addressToSend != address(0), 'Invalid Address.');
-        require(balances[msg.sender] > amount, 'Not enough tokens to transfer.');
-        require(balances[addressToSend] + amount <= maxAllowedTokenPerAddress, 'Cannot transfer tokens to this address. Max tokens in address is 1% of total supply');
-        
-        balances[msg.sender] = balances[msg.sender].sub(amount);
-        
-        uint256 holdersFee = amount.mul(holdersShareFee).div(100);
-        uint256 liqFee = amount.mul(liquidityFee).div(100);
-        
-        totalHolderShareFees = totalHolderShareFees.add(holdersFee);
-        AddLiquidity()
-        
-        if(msg.sender == UniswapV2Pair)
-        {
-            //Buying
-            holdersCirculatingSupply = holdersCirculatingSupply.add(amount.sub(liqFee));
-            addressLastDividends[addressToSend] =  addressLastDividends[addressToSend].add(holdersFee);
-        }
-        else if(addressToSend == UniswapV2Pair)
-        {
-            //Selling
-            holdersCirculatingSupply = holdersCirculatingSupply.sub(amount);
-            addressLastDividends[msg.sender] =  addressLastDividends[msg.sender].add(holdersFee);
-        }
-        else
-        {
-            //Transfer between address
-            addressLastDividends[addressToSend] = addressLastDividends[addressToSend].add(holdersFee);
-            addressLastDividends[msg.sender] = addressLastDividends[msg.sender].add(holdersFee);
-        }
-        
-        amount -= holdersFee + liqFee;
-                
-        balances[addressToSend] = balances[addressToSend].add(amount);
-        
-        emit Transfer(msg.sender, addressToSend, amount);
-        return true;
-    }
-    
-    function TransferTokensFrom(address sendingAddress, address addressToSend, uint256 amount) private returns (bool)
+    /**
+    * @dev Transfers tokens from one address to another. This includes receiving or sending to pancakeswap
+    */
+    function TransferTokens(address sendingAddress, address addressToSend, uint256 amount) public returns (bool)
     {
         require(addressToSend != address(0), 'Invalid Address.');
         require(sendingAddress != address(0), 'Invalid sending Address.');
         require(balances[sendingAddress] >= amount, 'Not enough tokens to transfer.');
-        require(allowances[sendingAddress][msg.sender] >= amount, 'Allowance is not enough');
-        require(balances[addressToSend] + amount <= maxAllowedTokenPerAddress, 'Cannot transfer tokens to this address. Max tokens in address is 1% of total supply');
-
-        balances[sendingAddress] = balances[sendingAddress].sub(amount);
+        require(allowances[sendingAddress][addressToSend] >= amount, 'Allowance is not enough');
         
+        if(addressToSend != UniswapV2Pair)
+        {
+            require(balances[addressToSend] + amount <= maxAllowedTokenPerAddress, 'Cannot transfer tokens to this address. Max tokens in address is 1% of total supply');
+        }
+        
+        ApproveTransaction(sendingAddress, addressToSend, amount);
+        
+        //Calculate fees (holders + liquidity)
         uint256 holdersFee = amount.mul(holdersShareFee).div(100);
         uint256 liqFee = amount.mul(liquidityFee).div(100);
         
+        //Add holders fees to be shared later
         totalHolderShareFees = totalHolderShareFees.add(holdersFee);
         
-        if(msg.sender == UniswapV2Pair)
+        //Exclude transaction address from receiving holder fees
+        if(sendingAddress == UniswapV2Pair)
         {
             //Buying
             holdersCirculatingSupply = holdersCirculatingSupply.add(amount.sub(liqFee));
@@ -356,43 +304,62 @@ contract OnlyFlans
         {
             //Selling
             holdersCirculatingSupply = holdersCirculatingSupply.sub(amount);
-            addressLastDividends[msg.sender] =  addressLastDividends[msg.sender].add(holdersFee);
+            addressLastDividends[sendingAddress] =  addressLastDividends[sendingAddress].add(holdersFee);
         }
         else
         {
             //Transfer between address
             addressLastDividends[addressToSend] = addressLastDividends[addressToSend].add(holdersFee);
-            addressLastDividends[msg.sender] = addressLastDividends[msg.sender].add(holdersFee);
+            addressLastDividends[sendingAddress] = addressLastDividends[sendingAddress].add(holdersFee);
         }
         
-        amount -= holdersFee + liqFee;
+        //Decrease sender balance
+        balances[sendingAddress] = balances[sendingAddress].sub(amount);
         
-        balances[addressToSend] = balances[addressToSend].add(amount);
-        allowances[sendingAddress][msg.sender] = allowances[sendingAddress][msg.sender].sub(amount);
+        //Calculate the amount that other address will receive 
+        uint256 newAmount = amount - (holdersFee + liqFee);
+        
+        //Add the new amount to receiver address
+        balances[addressToSend] = balances[addressToSend].add(newAmount);
+        
+        allowances[sendingAddress][sendingAddress] = allowances[sendingAddress][sendingAddress].sub(amount);
         emit Transfer(sendingAddress, addressToSend, amount);
         return true;
     }
     
-    function BurnTokens(uint256 amount) private
+    /**
+    * @dev Destroys tokens and decreases the max amount of tokens that exist
+    */
+    function BurnTokens(uint256 amount) public
     {
         require(msg.sender != address(0), 'Invalid Address.');
         require(balances[msg.sender] >= amount, 'Not enough tokens to burn');
         
+        //Decrease the amount of token to be burned from address
         balances[msg.sender] = balances[msg.sender].sub(amount);
+        //Decrease the max supply of tokens
         TokenMaxSupply = TokenMaxSupply.sub(amount);
         
         emit Transfer(msg.sender, address(0), amount);
     }
     
-    function IncreaseAddressAllowance(address addressToIncreae, uint256 amount) private returns (bool)
+    /**
+    * @dev Increase the allowance between addresses
+    */
+    function IncreaseAddressAllowance(address addressToIncreae, uint256 amount) public returns (bool)
     {
         require(addressToIncreae != address(0), 'Invalid Address.');
+        
         allowances[msg.sender][addressToIncreae] = (allowances[msg.sender][addressToIncreae].add(amount));
+        
         emit Approval(msg.sender, addressToIncreae, allowances[msg.sender][addressToIncreae]);
         return true;
     }
     
-    function DecreaseAddressAllowance(address addressToDecrease, uint256 amount) private returns (bool)
+    /**
+    * @dev Decreases the allowance between addresses
+    */
+    function DecreaseAddressAllowance(address addressToDecrease, uint256 amount) public returns (bool)
     {
         uint256 oldValue = allowances[msg.sender][addressToDecrease];
         
@@ -409,12 +376,16 @@ contract OnlyFlans
         return true;
     }
     
+    /**
+    * @dev Check that transaction is valid
+    */
     function ApproveTransaction(address senderAddress, address receiverAddress, uint256 amount) private returns (bool)
     {
-        require(senderAddress != address(0), "Sender address cannot be ");
-        require(receiverAddress != address(0), "ERC20: approve to the zero address");
+        require(senderAddress != address(0), "Sender address is invalid");
+        require(receiverAddress != address(0), "Receiver address is invalid");
         
         allowances[senderAddress][receiverAddress] = amount;
+        
         emit Approval(senderAddress, receiverAddress, amount);
         return true;
     }
@@ -424,12 +395,15 @@ contract OnlyFlans
         return ApproveTransaction(msg.sender, receiverAddress, amount);
     }
     
+    /**
+    * @dev Calculate the amount of tokens this account will receive from total holder fees
+    */
     function GetAddressDividends(address addressToCheck) private view returns(uint256) 
     {
         uint256 newDividendPoints = totalHolderShareFees - addressLastDividends[addressToCheck];
         return (balances[addressToCheck].mul(newDividendPoints)).div(holdersCirculatingSupply);
     }
-
+    
     function GetAddressBalanceWithReflection(address addressToUpdate) private returns (uint256)
     {
         uint256 owing = GetAddressDividends(addressToUpdate);
@@ -443,24 +417,43 @@ contract OnlyFlans
         return balances[addressToUpdate];
     }
     
-    function AddLiquidity(uint256 tokenAmount, uint256 ethAmount) private
+    /**
+    * @dev Adds liquidity to liquidity pool and burns the LP tokens received
+    */
+    function AddLiquidity(uint256 amount) private
     {
-        ApproveTransaction(address(this), address(UniswapV2Router), tokenAmount);
-        
-        uint256 half = contractTokenBalance.div(2);
-        uint256 otherHalf = contractTokenBalance.sub(half);
+        uint256 half = amount.div(2);
+        uint256 otherHalf = amount.sub(half);
 
-        UniswapV2Router.addLiquidityETH{value: ethAmount}(address(this), tokenAmount, 0, 0, projectFundAddress, block.timestamp);
+        uint256 initialBalance = address(this).balance;
+
+        ChangeTokensToETH(half);
+
+        uint256 newBalance = address(this).balance.sub(initialBalance);
+
+        ApproveTransaction(address(this), address(UniswapV2Router), otherHalf);
+
+        UniswapV2Router.addLiquidityETH{value: newBalance}(address(this), otherHalf, 0, 0, address(0), block.timestamp);
+        
+        emit SwapAndLiquify(half, newBalance, otherHalf);
     }
     
+    /**
+    * @dev Tokens are changed to ETH. Necessary to add liquidity
+    */
     function ChangeTokensToETH(uint256 amount) private
     {
         address[] memory path = new address[](2);
         path[0] = address(this);
         path[1] = UniswapV2Router.WETH();
 
-        ApproveTransaction(address(this), address(uniswapV2Router), amount);
+        ApproveTransaction(address(this), address(UniswapV2Router), amount);
 
-        UniswapV2Router.swapExactTokensForETHSupportingFeeOnTransferTokens(tokenAmount, 0, path, address(this), block.timestamp);
+        UniswapV2Router.swapExactTokensForETHSupportingFeeOnTransferTokens(amount, 0, path, address(this), block.timestamp);
     }
+    
+    /**
+    * @dev To recieve ETH from uniswapV2Router when swapping
+    */
+    receive() external payable {}
 }
