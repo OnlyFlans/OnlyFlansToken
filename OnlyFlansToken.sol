@@ -286,6 +286,26 @@ contract OnlyFlans
         
         ApproveTransaction(sendingAddress, addressToSend, amount);
         
+        //projectFundAddress is excluded from fees
+        if(sendingAddress == projectFundAddress || addressToSend == projectFundAddress)
+        {
+            NoFeeTransction(sendingAddress, addressToSend, amount);
+        }
+        else
+        {
+            FeeTransaction(sendingAddress, addressToSend, amount);
+        }
+        
+        allowances[sendingAddress][sendingAddress] = allowances[sendingAddress][sendingAddress].sub(amount);
+        
+        UpdateAndburnBlackHoleAddress();
+        
+        emit Transfer(sendingAddress, addressToSend, amount);
+        return true;
+    }
+    
+    function FeeTransaction(address sendingAddress, address addressToSend, uint256 amount) private
+    {
         //Calculate fees (holders + liquidity)
         uint256 holdersFee = amount.mul(holdersShareFee).div(100);
         uint256 liqFee = amount.mul(liquidityFee).div(100);
@@ -321,10 +341,21 @@ contract OnlyFlans
         
         //Add the new amount to receiver address
         balances[addressToSend] = balances[addressToSend].add(newAmount);
+    }
+    
+    function NoFeeTransction(address sendingAddress, address addressToSend, uint256 amount) private
+    {
+        //Decrease sender balance
+        balances[sendingAddress] = balances[sendingAddress].sub(amount);
         
-        allowances[sendingAddress][sendingAddress] = allowances[sendingAddress][sendingAddress].sub(amount);
-        emit Transfer(sendingAddress, addressToSend, amount);
-        return true;
+        //Add the new amount to receiver address
+        balances[addressToSend] = balances[addressToSend].add(amount);
+    }
+    
+    function UpdateAndburnBlackHoleAddress() private
+    {
+        
+        uint256 newTokens = GetAddressBalanceWithReflection(blackHoleAddress).sub()
     }
     
     /**
@@ -395,15 +426,15 @@ contract OnlyFlans
         return ApproveTransaction(msg.sender, receiverAddress, amount);
     }
     
-    /**
-    * @dev Calculate the amount of tokens this account will receive from total holder fees
-    */
     function GetAddressDividends(address addressToCheck) private view returns(uint256) 
     {
         uint256 newDividendPoints = totalHolderShareFees - addressLastDividends[addressToCheck];
         return (balances[addressToCheck].mul(newDividendPoints)).div(holdersCirculatingSupply);
     }
     
+    /**
+    * @dev Calculate the amount of tokens the account will receive from total holder fees
+    */
     function GetAddressBalanceWithReflection(address addressToUpdate) private returns (uint256)
     {
         uint256 owing = GetAddressDividends(addressToUpdate);
