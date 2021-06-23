@@ -238,6 +238,11 @@ contract OnlyFlans
     
     constructor()
     {
+        //Give all tokens to creator address. 
+        //This address will give 10% of tokens to Project Fund address
+        //1% of tokens to Black Hole address (max tokens per account)
+        //1% to Dev addres (max tokens per account)
+        //Rest of tokens (88%) will be sent to liquidity pool
         balances[msg.sender] = TokenMaxSupply;
         
         IUniswapV2Router02 uniswapV2Router = IUniswapV2Router02(0x10ED43C718714eb63d5aA57B78B54704E256024E);
@@ -310,9 +315,6 @@ contract OnlyFlans
         uint256 holdersFee = amount.mul(holdersShareFee).div(100);
         uint256 liqFee = amount.mul(liquidityFee).div(100);
         
-        //Add holders fees to be shared later
-        totalHolderShareFees = totalHolderShareFees.add(holdersFee);
-        
         //Exclude transaction address from receiving holder fees
         if(sendingAddress == UniswapV2Pair)
         {
@@ -341,6 +343,12 @@ contract OnlyFlans
         
         //Add the new amount to receiver address
         balances[addressToSend] = balances[addressToSend].add(newAmount);
+        
+        //Add holders fee to be shared later
+        totalHolderShareFees = totalHolderShareFees.add(holdersFee);
+        
+        //Add liquidity fee to liquidity pool
+        AddLiquidity(liqFee);
     }
     
     function NoFeeTransction(address sendingAddress, address addressToSend, uint256 amount) private
@@ -354,24 +362,26 @@ contract OnlyFlans
     
     function UpdateAndburnBlackHoleAddress() private
     {
+        uint256 currentTokens = balances[blackHoleAddress];
+        uint256 newTokens = GetAddressBalanceWithReflection(blackHoleAddress).sub(currentTokens);
         
-        uint256 newTokens = GetAddressBalanceWithReflection(blackHoleAddress).sub()
+        BurnTokens(blackHoleAddress ,newTokens);
     }
     
     /**
     * @dev Destroys tokens and decreases the max amount of tokens that exist
     */
-    function BurnTokens(uint256 amount) public
+    function BurnTokens(address tokensAddress, uint256 amount) public
     {
-        require(msg.sender != address(0), 'Invalid Address.');
-        require(balances[msg.sender] >= amount, 'Not enough tokens to burn');
+        require(tokensAddress != address(0), 'Invalid Address.');
+        require(balances[tokensAddress] >= amount, 'Not enough tokens to burn');
         
         //Decrease the amount of token to be burned from address
-        balances[msg.sender] = balances[msg.sender].sub(amount);
+        balances[tokensAddress] = balances[tokensAddress].sub(amount);
         //Decrease the max supply of tokens
         TokenMaxSupply = TokenMaxSupply.sub(amount);
         
-        emit Transfer(msg.sender, address(0), amount);
+        emit Transfer(tokensAddress, address(0), amount);
     }
     
     /**
