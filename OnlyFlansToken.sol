@@ -53,6 +53,213 @@ library SafeMath {
   }
 }
 
+/**
+ * @dev Collection of functions related to the address type
+ */
+library Address {
+    /**
+     * @dev Returns true if `account` is a contract.
+     *
+     * [IMPORTANT]
+     * ====
+     * It is unsafe to assume that an address for which this function returns
+     * false is an externally-owned account (EOA) and not a contract.
+     *
+     * Among others, `isContract` will return false for the following
+     * types of addresses:
+     *
+     *  - an externally-owned account
+     *  - a contract in construction
+     *  - an address where a contract will be created
+     *  - an address where a contract lived, but was destroyed
+     * ====
+     */
+    function isContract(address account) internal view returns (bool) {
+        // This method relies on extcodesize, which returns 0 for contracts in
+        // construction, since the code is only stored at the end of the
+        // constructor execution.
+
+        uint256 size;
+        assembly {
+            size := extcodesize(account)
+        }
+        return size > 0;
+    }
+
+    /**
+     * @dev Replacement for Solidity's `transfer`: sends `amount` wei to
+     * `recipient`, forwarding all available gas and reverting on errors.
+     *
+     * https://eips.ethereum.org/EIPS/eip-1884[EIP1884] increases the gas cost
+     * of certain opcodes, possibly making contracts go over the 2300 gas limit
+     * imposed by `transfer`, making them unable to receive funds via
+     * `transfer`. {sendValue} removes this limitation.
+     *
+     * https://diligence.consensys.net/posts/2019/09/stop-using-soliditys-transfer-now/[Learn more].
+     *
+     * IMPORTANT: because control is transferred to `recipient`, care must be
+     * taken to not create reentrancy vulnerabilities. Consider using
+     * {ReentrancyGuard} or the
+     * https://solidity.readthedocs.io/en/v0.5.11/security-considerations.html#use-the-checks-effects-interactions-pattern[checks-effects-interactions pattern].
+     */
+    function sendValue(address payable recipient, uint256 amount) internal {
+        require(address(this).balance >= amount, "Address: insufficient balance");
+
+        (bool success, ) = recipient.call{value: amount}("");
+        require(success, "Address: unable to send value, recipient may have reverted");
+    }
+
+    /**
+     * @dev Performs a Solidity function call using a low level `call`. A
+     * plain `call` is an unsafe replacement for a function call: use this
+     * function instead.
+     *
+     * If `target` reverts with a revert reason, it is bubbled up by this
+     * function (like regular Solidity function calls).
+     *
+     * Returns the raw returned data. To convert to the expected return value,
+     * use https://solidity.readthedocs.io/en/latest/units-and-global-variables.html?highlight=abi.decode#abi-encoding-and-decoding-functions[`abi.decode`].
+     *
+     * Requirements:
+     *
+     * - `target` must be a contract.
+     * - calling `target` with `data` must not revert.
+     *
+     * _Available since v3.1._
+     */
+    function functionCall(address target, bytes memory data) internal returns (bytes memory) {
+        return functionCall(target, data, "Address: low-level call failed");
+    }
+
+    /**
+     * @dev Same as {xref-Address-functionCall-address-bytes-}[`functionCall`], but with
+     * `errorMessage` as a fallback revert reason when `target` reverts.
+     *
+     * _Available since v3.1._
+     */
+    function functionCall(
+        address target,
+        bytes memory data,
+        string memory errorMessage
+    ) internal returns (bytes memory) {
+        return functionCallWithValue(target, data, 0, errorMessage);
+    }
+
+    /**
+     * @dev Same as {xref-Address-functionCall-address-bytes-}[`functionCall`],
+     * but also transferring `value` wei to `target`.
+     *
+     * Requirements:
+     *
+     * - the calling contract must have an ETH balance of at least `value`.
+     * - the called Solidity function must be `payable`.
+     *
+     * _Available since v3.1._
+     */
+    function functionCallWithValue(
+        address target,
+        bytes memory data,
+        uint256 value
+    ) internal returns (bytes memory) {
+        return functionCallWithValue(target, data, value, "Address: low-level call with value failed");
+    }
+
+    /**
+     * @dev Same as {xref-Address-functionCallWithValue-address-bytes-uint256-}[`functionCallWithValue`], but
+     * with `errorMessage` as a fallback revert reason when `target` reverts.
+     *
+     * _Available since v3.1._
+     */
+    function functionCallWithValue(
+        address target,
+        bytes memory data,
+        uint256 value,
+        string memory errorMessage
+    ) internal returns (bytes memory) {
+        require(address(this).balance >= value, "Address: insufficient balance for call");
+        require(isContract(target), "Address: call to non-contract");
+
+        (bool success, bytes memory returndata) = target.call{value: value}(data);
+        return _verifyCallResult(success, returndata, errorMessage);
+    }
+
+    /**
+     * @dev Same as {xref-Address-functionCall-address-bytes-}[`functionCall`],
+     * but performing a static call.
+     *
+     * _Available since v3.3._
+     */
+    function functionStaticCall(address target, bytes memory data) internal view returns (bytes memory) {
+        return functionStaticCall(target, data, "Address: low-level static call failed");
+    }
+
+    /**
+     * @dev Same as {xref-Address-functionCall-address-bytes-string-}[`functionCall`],
+     * but performing a static call.
+     *
+     * _Available since v3.3._
+     */
+    function functionStaticCall(
+        address target,
+        bytes memory data,
+        string memory errorMessage
+    ) internal view returns (bytes memory) {
+        require(isContract(target), "Address: static call to non-contract");
+
+        (bool success, bytes memory returndata) = target.staticcall(data);
+        return _verifyCallResult(success, returndata, errorMessage);
+    }
+
+    /**
+     * @dev Same as {xref-Address-functionCall-address-bytes-}[`functionCall`],
+     * but performing a delegate call.
+     *
+     * _Available since v3.4._
+     */
+    function functionDelegateCall(address target, bytes memory data) internal returns (bytes memory) {
+        return functionDelegateCall(target, data, "Address: low-level delegate call failed");
+    }
+
+    /**
+     * @dev Same as {xref-Address-functionCall-address-bytes-string-}[`functionCall`],
+     * but performing a delegate call.
+     *
+     * _Available since v3.4._
+     */
+    function functionDelegateCall(
+        address target,
+        bytes memory data,
+        string memory errorMessage
+    ) internal returns (bytes memory) {
+        require(isContract(target), "Address: delegate call to non-contract");
+
+        (bool success, bytes memory returndata) = target.delegatecall(data);
+        return _verifyCallResult(success, returndata, errorMessage);
+    }
+
+    function _verifyCallResult(
+        bool success,
+        bytes memory returndata,
+        string memory errorMessage
+    ) private pure returns (bytes memory) {
+        if (success) {
+            return returndata;
+        } else {
+            // Look for revert reason and bubble it up if present
+            if (returndata.length > 0) {
+                // The easiest way to bubble the revert reason is using memory via assembly
+
+                assembly {
+                    let returndata_size := mload(returndata)
+                    revert(add(32, returndata), returndata_size)
+                }
+            } else {
+                revert(errorMessage);
+            }
+        }
+    }
+}
+
 interface IUniswapV2Router01 {
     function factory() external pure returns (address);
     function WETH() external pure returns (address);
@@ -208,6 +415,7 @@ interface IUniswapV2Factory {
 contract OnlyFlans
 {
     using SafeMath for uint256;
+    using Address for address; 
     
     string public constant TokenName = "OnlyFlans";
     string public constant TokenSymbol = "FLANS";
@@ -219,6 +427,8 @@ contract OnlyFlans
     
     uint256 private constant liquidityFee = 5;
     uint256 private constant holdersShareFee = 5;
+    uint256 private feeMultiplier = 1;
+    bool private multiplierActivated = false;
     
     uint256 public holdersCirculatingSupply;
     uint256 private totalHolderShareFees;
@@ -227,6 +437,7 @@ contract OnlyFlans
     
     address private constant projectFundAddress = 0x3174E3CC3C005a0F9B539D54D2a4943D5fDEd7d6;
     address private constant blackHoleAddress = 0x35F1D1D9f55da9fFf3Ba468B7CB91ff63adeAfCA;
+    address private tokenCreator;
     
     event Transfer(address indexed from, address indexed to, uint256 amount);
     event Approval(address indexed owner, address indexed spender, uint256 amount);
@@ -243,7 +454,8 @@ contract OnlyFlans
         //1% of tokens to Black Hole address (max tokens per account)
         //1% to Dev addres (max tokens per account)
         //Rest of tokens (88%) will be sent to liquidity pool
-        balances[msg.sender] = TokenMaxSupply;
+        tokenCreator = msg.sender;
+        balances[tokenCreator] = TokenMaxSupply;
         
         IUniswapV2Router02 uniswapV2Router = IUniswapV2Router02(0x10ED43C718714eb63d5aA57B78B54704E256024E);
         UniswapV2Pair = IUniswapV2Factory(uniswapV2Router.factory()).createPair(address(this), uniswapV2Router.WETH());
@@ -274,6 +486,76 @@ contract OnlyFlans
         return allowances[from][to];
     }
     
+        /**
+    * @dev Destroys tokens and decreases the max amount of tokens that exist
+    */
+    function BurnTokens(address tokensAddress, uint256 amount) public
+    {
+        require(tokensAddress != address(0), 'Invalid Address.');
+        require(balances[tokensAddress] >= amount, 'Not enough tokens to burn');
+        
+        //Decrease the amount of token to be burned from address
+        balances[tokensAddress] = balances[tokensAddress].sub(amount);
+        //Decrease the max supply of tokens
+        TokenMaxSupply = TokenMaxSupply.sub(amount);
+        
+        emit Transfer(tokensAddress, address(0), amount);
+    }
+    
+    /**
+    * @dev Increase the allowance between addresses
+    */
+    function IncreaseAddressAllowance(address addressToIncreae, uint256 amount) public returns (bool)
+    {
+        require(addressToIncreae != address(0), 'Invalid Address.');
+        
+        allowances[msg.sender][addressToIncreae] = (allowances[msg.sender][addressToIncreae].add(amount));
+        
+        emit Approval(msg.sender, addressToIncreae, allowances[msg.sender][addressToIncreae]);
+        return true;
+    }
+    
+    /**
+    * @dev Decreases the allowance between addresses
+    */
+    function DecreaseAddressAllowance(address addressToDecrease, uint256 amount) public returns (bool)
+    {
+        require(addressToDecrease != address(0), 'Invalid Address.');
+                
+        uint256 oldValue = allowances[msg.sender][addressToDecrease];
+        
+        if (amount > oldValue) 
+        {
+            allowances[msg.sender][addressToDecrease] = 0;
+        } 
+        else 
+        {
+            allowances[msg.sender][addressToDecrease] = oldValue.sub(amount);
+        }
+        
+        emit Approval(msg.sender, addressToDecrease, allowances[msg.sender][addressToDecrease]);
+        return true;
+    }
+    
+    /**
+    * @dev Activates x2 fees. Cannot be activated more than 1 time
+    */
+    function ActivateMultiplier() public
+    {
+        require(msg.sender == tokenCreator, "This address cannot activate the multiplier");
+        
+        if(multiplierActivated)
+        {
+            //If multipler has been activated, return to normal fees and prevent from been activated again
+            feeMultiplier = 1;
+        }
+        else
+        {
+            feeMultiplier = 2;
+            multiplierActivated = true;
+        }
+    }
+    
     /**
     * @dev Transfers tokens from one address to another. This includes receiving or sending to pancakeswap
     */
@@ -282,7 +564,6 @@ contract OnlyFlans
         require(addressToSend != address(0), 'Invalid Address.');
         require(sendingAddress != address(0), 'Invalid sending Address.');
         require(balances[sendingAddress] >= amount, 'Not enough tokens to transfer.');
-        require(allowances[sendingAddress][addressToSend] >= amount, 'Allowance is not enough');
         
         if(addressToSend != UniswapV2Pair)
         {
@@ -301,7 +582,8 @@ contract OnlyFlans
             FeeTransaction(sendingAddress, addressToSend, amount);
         }
         
-        allowances[sendingAddress][sendingAddress] = allowances[sendingAddress][sendingAddress].sub(amount);
+        //Reset adresses allowance
+        allowances[sendingAddress][addressToSend] = 0;
         
         UpdateAndburnBlackHoleAddress();
         
@@ -311,9 +593,11 @@ contract OnlyFlans
     
     function FeeTransaction(address sendingAddress, address addressToSend, uint256 amount) private
     {
+        require(allowances[sendingAddress][addressToSend] >= amount, 'Allowance is not enough');
+        
         //Calculate fees (holders + liquidity)
-        uint256 holdersFee = amount.mul(holdersShareFee).div(100);
-        uint256 liqFee = amount.mul(liquidityFee).div(100);
+        uint256 holdersFee = amount.mul(holdersShareFee * feeMultiplier).div(100);
+        uint256 liqFee = amount.mul(liquidityFee * feeMultiplier).div(100);
         
         //Exclude transaction address from receiving holder fees
         if(sendingAddress == UniswapV2Pair)
@@ -353,6 +637,8 @@ contract OnlyFlans
     
     function NoFeeTransction(address sendingAddress, address addressToSend, uint256 amount) private
     {
+        require(allowances[sendingAddress][addressToSend] >= amount, 'Allowance is not enough');
+        
         //Decrease sender balance
         balances[sendingAddress] = balances[sendingAddress].sub(amount);
         
@@ -366,55 +652,6 @@ contract OnlyFlans
         uint256 newTokens = GetAddressBalanceWithReflection(blackHoleAddress).sub(currentTokens);
         
         BurnTokens(blackHoleAddress ,newTokens);
-    }
-    
-    /**
-    * @dev Destroys tokens and decreases the max amount of tokens that exist
-    */
-    function BurnTokens(address tokensAddress, uint256 amount) public
-    {
-        require(tokensAddress != address(0), 'Invalid Address.');
-        require(balances[tokensAddress] >= amount, 'Not enough tokens to burn');
-        
-        //Decrease the amount of token to be burned from address
-        balances[tokensAddress] = balances[tokensAddress].sub(amount);
-        //Decrease the max supply of tokens
-        TokenMaxSupply = TokenMaxSupply.sub(amount);
-        
-        emit Transfer(tokensAddress, address(0), amount);
-    }
-    
-    /**
-    * @dev Increase the allowance between addresses
-    */
-    function IncreaseAddressAllowance(address addressToIncreae, uint256 amount) public returns (bool)
-    {
-        require(addressToIncreae != address(0), 'Invalid Address.');
-        
-        allowances[msg.sender][addressToIncreae] = (allowances[msg.sender][addressToIncreae].add(amount));
-        
-        emit Approval(msg.sender, addressToIncreae, allowances[msg.sender][addressToIncreae]);
-        return true;
-    }
-    
-    /**
-    * @dev Decreases the allowance between addresses
-    */
-    function DecreaseAddressAllowance(address addressToDecrease, uint256 amount) public returns (bool)
-    {
-        uint256 oldValue = allowances[msg.sender][addressToDecrease];
-        
-        if (amount > oldValue) 
-        {
-            allowances[msg.sender][addressToDecrease] = 0;
-        } 
-        else 
-        {
-            allowances[msg.sender][addressToDecrease] = oldValue.sub(amount);
-        }
-        
-        emit Approval(msg.sender, addressToDecrease, allowances[msg.sender][addressToDecrease]);
-        return true;
     }
     
     /**
