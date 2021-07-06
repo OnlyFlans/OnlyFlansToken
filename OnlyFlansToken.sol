@@ -2,6 +2,104 @@
 
 pragma solidity ^0.8.4;
 
+
+/**
+ * @dev Interface of the ERC20 standard as defined in the EIP.
+ */
+interface IERC20 {
+    /**
+     * @dev Returns the amount of tokens in existence.
+     */
+    function totalSupply() external view returns (uint256);
+
+    /**
+     * @dev Returns the amount of tokens owned by `account`.
+     */
+    function balanceOf(address account) external view returns (uint256);
+
+    /**
+     * @dev Moves `amount` tokens from the caller's account to `recipient`.
+     *
+     * Returns a boolean value indicating whether the operation succeeded.
+     *
+     * Emits a {Transfer} event.
+     */
+    function transfer(address recipient, uint256 amount) external returns (bool);
+
+    /**
+     * @dev Returns the remaining number of tokens that `spender` will be
+     * allowed to spend on behalf of `owner` through {transferFrom}. This is
+     * zero by default.
+     *
+     * This value changes when {approve} or {transferFrom} are called.
+     */
+    function allowance(address owner, address spender) external view returns (uint256);
+
+    /**
+     * @dev Sets `amount` as the allowance of `spender` over the caller's tokens.
+     *
+     * Returns a boolean value indicating whether the operation succeeded.
+     *
+     * IMPORTANT: Beware that changing an allowance with this method brings the risk
+     * that someone may use both the old and the new allowance by unfortunate
+     * transaction ordering. One possible solution to mitigate this race
+     * condition is to first reduce the spender's allowance to 0 and set the
+     * desired value afterwards:
+     * https://github.com/ethereum/EIPs/issues/20#issuecomment-263524729
+     *
+     * Emits an {Approval} event.
+     */
+    function approve(address spender, uint256 amount) external returns (bool);
+
+    /**
+     * @dev Moves `amount` tokens from `sender` to `recipient` using the
+     * allowance mechanism. `amount` is then deducted from the caller's
+     * allowance.
+     *
+     * Returns a boolean value indicating whether the operation succeeded.
+     *
+     * Emits a {Transfer} event.
+     */
+    function transferFrom(address sender, address recipient, uint256 amount) external returns (bool);
+
+    /**
+     * @dev Emitted when `value` tokens are moved from one account (`from`) to
+     * another (`to`).
+     *
+     * Note that `value` may be zero.
+     */
+    event Transfer(address indexed from, address indexed to, uint256 value);
+
+    /**
+     * @dev Emitted when the allowance of a `spender` for an `owner` is set by
+     * a call to {approve}. `value` is the new allowance.
+     */
+    event Approval(address indexed owner, address indexed spender, uint256 value);
+}
+
+/**
+ * @dev Interface for the optional metadata functions from the ERC20 standard.
+ *
+ * _Available since v4.1._
+ */
+interface IERC20Metadata {
+    /**
+     * @dev Returns the name of the token.
+     */
+    function name() external pure returns (string memory);
+
+    /**
+     * @dev Returns the symbol of the token.
+     */
+    function symbol() external pure returns (string memory);
+
+    /**
+     * @dev Returns the decimals places of the token.
+     */
+    function decimals() external pure returns (uint8);
+}
+
+
 /*
 /**
  * @title SafeMath
@@ -412,15 +510,15 @@ interface IUniswapV2Factory {
 }
 
 
-contract OnlyFlans
+contract OnlyFlans is IERC20, IERC20Metadata
 {
     using SafeMath for uint256;
     using Address for address; 
     
-    string public constant TokenName = "OnlyFlans";
-    string public constant TokenSymbol = "FLANS";
-    uint256 public constant Decimals = 9;
-    uint256 public TokenMaxSupply = 1000000000000 * (10 ** uint256(Decimals));
+    string private constant tokenName = "OnlyFlans";
+    string private constant tokenSymbol = "FLANS";
+    uint8 private constant tokenDecimals = 9;
+    uint256 public TokenMaxSupply = 1000000000000000 * (10 ** uint256(tokenDecimals));
     
     IUniswapV2Router02 public immutable UniswapV2Router;
     address public immutable UniswapV2Pair;
@@ -433,14 +531,12 @@ contract OnlyFlans
     uint256 public holdersCirculatingSupply;
     uint256 private totalHolderShareFees;
     
-    uint256 private constant maxAllowedTokenPerAddress = 10000000000 * (10 ** uint256(Decimals));
+    uint256 private constant maxAllowedTokenPerAddress = 10000000000 * (10 ** uint8(tokenDecimals));
     
     address private constant projectFundAddress = 0x3174E3CC3C005a0F9B539D54D2a4943D5fDEd7d6;
     address private constant blackHoleAddress = 0x35F1D1D9f55da9fFf3Ba468B7CB91ff63adeAfCA;
     address private tokenCreator;
     
-    event Transfer(address indexed from, address indexed to, uint256 amount);
-    event Approval(address indexed owner, address indexed spender, uint256 amount);
     event SwapAndLiquify(uint256 tokensSwapped, uint256 ethReceived, uint256 tokensIntoLiqudity);
     
     mapping (address => uint256) private balances;
@@ -464,10 +560,22 @@ contract OnlyFlans
         emit Transfer(address(0), tokenCreator, TokenMaxSupply);
     }
     
+    function name() public pure override returns (string memory) {
+        return tokenName;
+    }
+
+    function symbol() public pure override returns (string memory) {
+        return tokenSymbol;
+    }
+
+    function decimals() public pure override returns (uint8) {
+        return tokenDecimals;
+    }
+
     /**
     * @dev Returns the total supply of this token
     */
-    function TotalSupply() public view returns (uint256)
+    function totalSupply() public view override returns (uint256)
     {
         return TokenMaxSupply;
     }
@@ -475,20 +583,42 @@ contract OnlyFlans
     /**
     * @dev Check the number of tokens owned by an address including holder reflections
     */
-    function CheckAddressBalance(address addressToCheck) public returns (uint256)
+    function balanceOf(address addressToCheck) public view override returns (uint256)
     {
-        return GetAddressBalanceWithReflection(addressToCheck);
+        return balances[addressToCheck] + GetAddressDividends(addressToCheck);
     }
     
     /**
     * @dev Check the allowance between addresses
     */
-    function CheckAllowance(address from, address to) public view returns (uint256)
+    function allowance(address from, address to) public view override returns (uint256)
     {
         return allowances[from][to];
     }
     
-        /**
+    /**
+    * @dev Sets `amount` as the allowance of `receiverAddress` over the caller's tokens.
+    */
+    function approve(address receiverAddress, uint256 amount) public override returns (bool)
+    {
+        return ApproveTransaction(msg.sender, receiverAddress, amount);
+    }
+    
+    /**
+    * @dev Transfers tokens from one address to another. This includes receiving or sending to pancakeswap
+    */
+    function transfer(address addressToSend, uint256 amount) public override returns (bool)
+    {
+        return transferFrom(msg.sender, addressToSend, amount);
+    }
+    
+    function transferFrom(address senderAddress, address addressToSend, uint256 amount) public override returns (bool)
+    {
+        return TransferTokens(senderAddress, addressToSend, amount);
+    }
+
+    
+    /**
     * @dev Destroys tokens and decreases the max amount of tokens that exist
     */
     function BurnTokens(address tokensAddress, uint256 amount) public
@@ -561,11 +691,15 @@ contract OnlyFlans
     /**
     * @dev Transfers tokens from one address to another. This includes receiving or sending to pancakeswap
     */
-    function TransferTokens(address sendingAddress, address addressToSend, uint256 amount) public returns (bool)
+    function TransferTokens(address sendingAddress, address addressToSend, uint256 amount) private returns (bool)
     {
         require(addressToSend != address(0), 'Invalid Address.');
         require(sendingAddress != address(0), 'Invalid sending Address.');
-        require(balances[sendingAddress] >= amount, 'Not enough tokens to transfer.');
+        
+        if(sendingAddress != UniswapV2Pair)
+        {
+            require(GetAddressBalanceWithReflection(sendingAddress) >= amount, 'Not enough tokens to transfer.');
+        }
         
         if(addressToSend != UniswapV2Pair)
         {
@@ -688,7 +822,8 @@ contract OnlyFlans
     {
         uint256 owing = GetAddressDividends(addressToUpdate);
         
-        if(owing > 0) 
+        //exclude tokenCreator from adding holders fees
+        if(addressToUpdate != tokenCreator && owing > 0) 
         {
             balances[addressToUpdate] = balances[addressToUpdate].add(owing);
             addressLastDividends[addressToUpdate] = totalHolderShareFees;
