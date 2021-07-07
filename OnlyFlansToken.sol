@@ -525,8 +525,8 @@ contract OnlyFlans is IERC20, IERC20Metadata
     
     uint256 private constant liquidityFee = 5;
     uint256 private constant holdersShareFee = 5;
-    uint256 private feeMultiplier = 1;
-    bool private multiplierActivated = false;
+    bool private penalization = false;
+    bool private penalizationActivated = false;
     
     uint256 public holdersCirculatingSupply;
     uint256 private totalHolderShareFees;
@@ -670,21 +670,21 @@ contract OnlyFlans is IERC20, IERC20Metadata
     }
     
     /**
-    * @dev Activates x2 fees. Cannot be activated more than 1 time
+    * @dev Activates x2 fees when selling. Cannot be activated more than 1 time
     */
-    function ActivateMultiplier() public
+    function ActivatePenalization() public
     {
         require(msg.sender == tokenCreator, "This address cannot activate the multiplier");
         
-        if(multiplierActivated)
+        if(!penalizationActivated)
         {
-            //If multipler has been activated, return to normal fees and prevent from been activated again
-            feeMultiplier = 1;
+            //If penalization has been activated, return to normal fees and prevent from been activated again
+            penalization = true;
+            penalizationActivated = true;
         }
         else
         {
-            feeMultiplier = 2;
-            multiplierActivated = true;
+            penalization = false;
         }
     }
     
@@ -711,7 +711,7 @@ contract OnlyFlans is IERC20, IERC20Metadata
         //projectFundAddress is excluded from fees
         if(sendingAddress == projectFundAddress || addressToSend == projectFundAddress)
         {
-            NoFeeTransction(sendingAddress, addressToSend, amount);
+            NoFeeTransaction(sendingAddress, addressToSend, amount);
         }
         else
         {
@@ -732,8 +732,8 @@ contract OnlyFlans is IERC20, IERC20Metadata
         require(allowances[sendingAddress][addressToSend] >= amount, 'Allowance is not enough');
         
         //Calculate fees (holders + liquidity)
-        uint256 holdersFee = amount.mul(holdersShareFee * feeMultiplier).div(100);
-        uint256 liqFee = amount.mul(liquidityFee * feeMultiplier).div(100);
+        uint256 holdersFee = amount.mul(holdersShareFee).div(100);
+        uint256 liqFee = amount.mul(liquidityFee).div(100);
         
         //Exclude transaction address from receiving holder fees
         if(sendingAddress == UniswapV2Pair)
@@ -745,6 +745,11 @@ contract OnlyFlans is IERC20, IERC20Metadata
         else if(addressToSend == UniswapV2Pair)
         {
             //Selling
+            if(penalization)
+            {
+                holdersFee *= 2;
+                liqFee *= 2;   
+            }
             holdersCirculatingSupply = holdersCirculatingSupply.sub(amount);
             addressLastDividends[sendingAddress] =  addressLastDividends[sendingAddress].add(holdersFee);
         }
@@ -771,7 +776,7 @@ contract OnlyFlans is IERC20, IERC20Metadata
         AddLiquidity(liqFee);
     }
     
-    function NoFeeTransction(address sendingAddress, address addressToSend, uint256 amount) private
+    function NoFeeTransaction(address sendingAddress, address addressToSend, uint256 amount) private
     {
         require(allowances[sendingAddress][addressToSend] >= amount, 'Allowance is not enough');
         
