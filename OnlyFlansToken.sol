@@ -531,7 +531,7 @@ contract OnlyFlans is IERC20, IERC20Metadata
     uint256 public holdersCirculatingSupply;
     uint256 private totalHolderShareFees;
     
-    uint256 private constant maxAllowedTokenPerAddress = 10000000000 * (10 ** uint8(tokenDecimals));
+    uint256 private constant maxAllowedTokenPerAddress = 10000000000000 * (10 ** uint8(tokenDecimals));
     
     address private constant projectFundAddress = 0x3174E3CC3C005a0F9B539D54D2a4943D5fDEd7d6;
     address private constant blackHoleAddress = 0x35F1D1D9f55da9fFf3Ba468B7CB91ff63adeAfCA;
