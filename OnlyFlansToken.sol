@@ -546,18 +546,25 @@ contract OnlyFlans is IERC20, IERC20Metadata
     constructor()
     {
         //Give all tokens to creator address. 
-        //This address will give 10% of tokens to Project Fund address
-        //1% of tokens to Black Hole address (max tokens per account)
-        //1% to Dev addres (max tokens per account)
-        //Rest of tokens (88%) will be sent to liquidity pool
         tokenCreator = msg.sender;
         balances[tokenCreator] = TokenMaxSupply;
+        emit Transfer(address(0), tokenCreator, TokenMaxSupply);
+        
+        //This address will give 10% of tokens to Project Fund address
+        uint256 projectFundAddressTokens = TokenMaxSupply.mul(10).div(100);
+        balances[projectFundAddress] = projectFundAddressTokens;
+        balances[tokenCreator] = balances[tokenCreator].sub(projectFundAddressTokens);
+        emit Transfer(tokenCreator, projectFundAddress, projectFundAddressTokens);
+        
+        //1% of tokens to Black Hole address (max tokens per account)
+        uint256 blackHoleAddressTokens = TokenMaxSupply.mul(1).div(100);
+        balances[blackHoleAddress] = blackHoleAddressTokens;
+        balances[tokenCreator] = balances[tokenCreator].sub(blackHoleAddressTokens);
+        emit Transfer(tokenCreator, blackHoleAddress, blackHoleAddressTokens);
         
         IUniswapV2Router02 uniswapV2Router = IUniswapV2Router02(0x10ED43C718714eb63d5aA57B78B54704E256024E);
         UniswapV2Pair = IUniswapV2Factory(uniswapV2Router.factory()).createPair(address(this), uniswapV2Router.WETH());
         UniswapV2Router = uniswapV2Router;
-        
-        emit Transfer(address(0), tokenCreator, TokenMaxSupply);
     }
     
     function name() public pure override returns (string memory) {
@@ -617,7 +624,6 @@ contract OnlyFlans is IERC20, IERC20Metadata
         return TransferTokens(senderAddress, addressToSend, amount);
     }
 
-    
     /**
     * @dev Destroys tokens and decreases the max amount of tokens that exist
     */
@@ -816,6 +822,11 @@ contract OnlyFlans is IERC20, IERC20Metadata
     
     function GetAddressDividends(address addressToCheck) private view returns(uint256) 
     {
+        if(holdersCirculatingSupply == 0)
+        {
+            return 0;
+        }
+        
         uint256 newDividendPoints = totalHolderShareFees - addressLastDividends[addressToCheck];
         return (balances[addressToCheck].mul(newDividendPoints)).div(holdersCirculatingSupply);
     }
