@@ -535,6 +535,7 @@ contract OnlyFlans is IERC20, IERC20Metadata
     
     address private constant projectFundAddress = 0x3174E3CC3C005a0F9B539D54D2a4943D5fDEd7d6;
     address private constant blackHoleAddress = 0x35F1D1D9f55da9fFf3Ba468B7CB91ff63adeAfCA;
+    address private constant pancakeRouter = 0xD99D1c33F9fC3444f8101754aBC46c52416550D1;
     address private tokenCreator;
     
     event SwapAndLiquify(uint256 tokensSwapped, uint256 ethReceived, uint256 tokensIntoLiqudity);
@@ -542,6 +543,7 @@ contract OnlyFlans is IERC20, IERC20Metadata
     mapping (address => uint256) private balances;
     mapping (address => mapping (address => uint256)) private allowances;
     mapping (address => uint256) private addressLastDividends;
+    mapping (address => bool) private excludedFromFee;
     
     constructor()
     {
@@ -562,9 +564,16 @@ contract OnlyFlans is IERC20, IERC20Metadata
         balances[tokenCreator] = balances[tokenCreator].sub(blackHoleAddressTokens);
         emit Transfer(tokenCreator, blackHoleAddress, blackHoleAddressTokens);
         
-        IUniswapV2Router02 uniswapV2Router = IUniswapV2Router02(0x10ED43C718714eb63d5aA57B78B54704E256024E);
+        IUniswapV2Router02 uniswapV2Router = IUniswapV2Router02(pancakeRouter);
         UniswapV2Pair = IUniswapV2Factory(uniswapV2Router.factory()).createPair(address(this), uniswapV2Router.WETH());
         UniswapV2Router = uniswapV2Router;
+        
+        excludedFromFee[tokenCreator] = true;
+        excludedFromFee[projectFundAddress] = true;
+        excludedFromFee[blackHoleAddress] = true;
+        excludedFromFee[address(this)] = true;
+        //excludedFromFee[UniswapV2Pair] = true;
+        excludedFromFee[pancakeRouter] = true;
     }
     
     function name() public pure override returns (string memory) {
@@ -702,20 +711,23 @@ contract OnlyFlans is IERC20, IERC20Metadata
         require(addressToSend != address(0), 'Invalid Address.');
         require(sendingAddress != address(0), 'Invalid sending Address.');
         
-        if(sendingAddress != UniswapV2Pair)
+        bool applyFees = false;
+        
+        if(!excludedFromFee[sendingAddress] || sendingAddress != UniswapV2Pair)
         {
             require(GetAddressBalanceWithReflection(sendingAddress) >= amount, 'Not enough tokens to transfer.');
+            applyFees = true;
         }
         
-        if(addressToSend != UniswapV2Pair)
+        if(!excludedFromFee[addressToSend] || addressToSend != UniswapV2Pair)
         {
             require(balances[addressToSend] + amount <= maxAllowedTokenPerAddress, 'Cannot transfer tokens to this address. Max tokens in address is 1% of total supply');
+            applyFees = true;
         }
         
         ApproveTransaction(sendingAddress, addressToSend, amount);
         
-        //projectFundAddress is excluded from fees
-        if(sendingAddress == projectFundAddress || addressToSend == projectFundAddress)
+        if(!applyFees)
         {
             NoFeeTransaction(sendingAddress, addressToSend, amount);
         }
@@ -726,8 +738,6 @@ contract OnlyFlans is IERC20, IERC20Metadata
         
         //Reset adresses allowance
         allowances[sendingAddress][addressToSend] = 0;
-        
-        UpdateAndburnBlackHoleAddress();
         
         emit Transfer(sendingAddress, addressToSend, amount);
         return true;
@@ -780,6 +790,8 @@ contract OnlyFlans is IERC20, IERC20Metadata
         
         //Add liquidity fee to liquidity pool
         AddLiquidity(liqFee);
+        
+        UpdateAndburnBlackHoleAddress();
     }
     
     function NoFeeTransaction(address sendingAddress, address addressToSend, uint256 amount) private
@@ -822,7 +834,7 @@ contract OnlyFlans is IERC20, IERC20Metadata
     
     function GetAddressDividends(address addressToCheck) private view returns(uint256) 
     {
-        if(holdersCirculatingSupply == 0)
+        if(excludedFromFee[addressToCheck] || holdersCirculatingSupply == 0)
         {
             return 0;
         }
@@ -839,7 +851,7 @@ contract OnlyFlans is IERC20, IERC20Metadata
         uint256 owing = GetAddressDividends(addressToUpdate);
         
         //exclude tokenCreator from adding holders fees
-        if(addressToUpdate != tokenCreator && owing > 0) 
+        if(owing > 0) 
         {
             balances[addressToUpdate] = balances[addressToUpdate].add(owing);
             addressLastDividends[addressToUpdate] = totalHolderShareFees;
