@@ -572,7 +572,6 @@ contract OnlyFlans is IERC20, IERC20Metadata
         excludedFromFee[projectFundAddress] = true;
         excludedFromFee[blackHoleAddress] = true;
         excludedFromFee[address(this)] = true;
-        //excludedFromFee[UniswapV2Pair] = true;
         excludedFromFee[pancakeRouter] = true;
     }
     
@@ -711,21 +710,24 @@ contract OnlyFlans is IERC20, IERC20Metadata
         require(addressToSend != address(0), 'Invalid Address.');
         require(sendingAddress != address(0), 'Invalid sending Address.');
         
+        ApproveTransaction(sendingAddress, addressToSend, amount);
+        
         bool applyFees = false;
         
-        if(!excludedFromFee[sendingAddress] || sendingAddress != UniswapV2Pair)
+        if(sendingAddress == UniswapV2Pair)
         {
-            require(GetAddressBalanceWithReflection(sendingAddress) >= amount, 'Not enough tokens to transfer.');
-            applyFees = true;
+            if(!excludedFromFee[addressToSend])
+            {
+                applyFees = true;
+            }
         }
-        
-        if(!excludedFromFee[addressToSend] || addressToSend != UniswapV2Pair)
+        else if(addressToSend == UniswapV2Pair)
         {
-            require(balances[addressToSend] + amount <= maxAllowedTokenPerAddress, 'Cannot transfer tokens to this address. Max tokens in address is 1% of total supply');
-            applyFees = true;
+            if(!excludedFromFee[sendingAddress])
+            {
+                applyFees = true;
+            }
         }
-        
-        ApproveTransaction(sendingAddress, addressToSend, amount);
         
         if(!applyFees)
         {
